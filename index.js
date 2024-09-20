@@ -1,237 +1,269 @@
-import blessed from 'blessed';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import yaml from 'js-yaml';
-import axios from 'axios';
-import os from 'os';
+#!/usr/bin/env node
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const blessed = require("blessed");
+const { Configuration, OpenAIApi } = require("openai");
+const sqlite3 = require("sqlite3").verbose();
+const dotenv = require("dotenv");
+const fs = require("fs");
+const yaml = require("js-yaml");
 
-const CONFIG_DIR = path.join(os.homedir(), '.config', 'cli-ai-chat');
-const AGENT_DIR = path.join(CONFIG_DIR, 'agents');
-const PLUGIN_DIR = path.join(__dirname, 'plugins');
+// Load environment variables
+dotenv.config();
 
-// Default configurations
-const DEFAULT_CONFIG = {
-  default_provider: 'openai',
-  default_agent: 'default',
-  providers: {
-    openai: {
-      api_key: 'YOUR_API_KEY_HERE',
-      default_model: 'gpt-3.5-turbo'
+// Load configuration
+const config = yaml.load(fs.readFileSync("./config.yaml", "utf8"));
+
+// Initialize OpenAI API
+const openaiConfig = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(openaiConfig);
+
+// Initialize SQLite database
+const db = new sqlite3.Database("./data/conversations.db");
+
+// Create tables if they don't exist
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id INTEGER,
+      content TEXT,
+      role TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+    )
+  `);
+});
+
+// Initialize Blessed screen
+const screen = blessed.screen({
+  smartCSR: true,
+  title: "AI Chat CLI",
+});
+
+// Left sidebar for threads
+const threadList = blessed.list({
+  parent: screen,
+  label: " Threads ",
+  width: "30%",
+  height: "100%-1",
+  keys: true,
+  vi: true,
+  border: "line",
+  style: {
+    selected: {
+      bg: "blue",
+    },
+  },
+});
+
+// Main chat area
+const chatArea = blessed.box({
+  parent: screen,
+  label: " Conversation ",
+  left: "30%",
+  width: "70%",
+  height: "100%-3",
+  keys: true,
+  vi: true,
+  scrollable: true,
+  alwaysScroll: true,
+  border: "line",
+});
+
+// Input field
+const input = blessed.textbox({
+  parent: screen,
+  bottom: 1,
+  height: 1,
+  inputOnFocus: true,
+});
+
+// Status bar
+const statusBar = blessed.box({
+  parent: screen,
+  bottom: 0,
+  height: 1,
+  content: "Model: GPT-3.5 Turbo | Tokens Used: 0",
+  style: {
+    bg: "gray",
+    fg: "black",
+  },
+});
+
+// Load conversations into threadList
+function loadConversations() {
+  db.all(
+    `SELECT id, title FROM conversations ORDER BY created_at DESC`,
+    (err, rows) => {
+      if (err) throw err;
+      const items = rows.map((row) => `[#${row.id}] ${row.title}`);
+      threadList.setItems(items);
+      screen.render();
     }
-  }
-};
+  );
+}
 
-const DEFAULT_UI_CONFIG = {
-  colors: {
-    chat_text: 'white',
-    input_text: 'white',
-    input_bg: 'blue',
-    status_text: 'white',
-    status_bg: 'green'
-  }
-};
+// Current conversation state
+let currentConversationId = null;
+let tokenUsage = 0;
 
-const DEFAULT_AGENT_CONFIG = {
-  name: 'default',
-  provider: 'openai',
-  model: 'gpt-3.5-turbo',
-  system_prompt: 'You are a helpful assistant.',
-  response_generation: {
-    temperature: 0.7,
-    max_tokens: 1000
-  }
-};
-
-// Load configurations with fallback to defaults
-const loadConfig = async (file, defaultConfig) => {
-  try {
-    return yaml.load(await fs.readFile(path.join(CONFIG_DIR, file), 'utf8'));
-  } catch (error) {
-    console.warn(`Warning: Could not load ${file}. Using default configuration.`);
-    return defaultConfig;
-  }
-};
-
-const loadAgentConfigs = async () => {
-  try {
-    const files = await fs.readdir(AGENT_DIR);
-    const configs = {};
-    for (const file of files) {
-      if (file.endsWith('.yaml')) {
-        const agentName = path.basename(file, '.yaml');
-        configs[agentName] = yaml.load(await fs.readFile(path.join(AGENT_DIR, file), 'utf8'));
-      }
+// Load messages for the selected conversation
+function loadMessages(conversationId) {
+  chatArea.setContent("");
+  db.all(
+    `SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
+    [conversationId],
+    (err, rows) => {
+      if (err) throw err;
+      rows.forEach((row) => {
+        chatArea.pushLine(`{bold}${row.role}:{/bold} ${row.content}`);
+      });
+      chatArea.setScrollPerc(100);
+      screen.render();
     }
-    return Object.keys(configs).length > 0 ? configs : { default: DEFAULT_AGENT_CONFIG };
-  } catch (error) {
-    console.warn('Warning: Could not load agent configurations. Using default agent.');
-    return { default: DEFAULT_AGENT_CONFIG };
+  );
+}
+
+// Handle thread selection
+threadList.on("select", (_, index) => {
+  const item = threadList.getItem(index).getText();
+  const conversationId = parseInt(item.match(/\[#(\d+)\]/)[1]);
+  currentConversationId = conversationId;
+  loadMessages(conversationId);
+});
+
+// Input handling
+input.key("enter", async () => {
+  const message = input.getValue();
+  input.clearValue();
+  screen.render();
+
+  if (message.startsWith("/")) {
+    handleCommand(message);
+    return;
   }
-};
 
-// Load provider plugins with error handling
-const loadProviderPlugin = async (providerName) => {
-  try {
-    const pluginPath = path.join(PLUGIN_DIR, `${providerName}.js`);
-    return await import(pluginPath);
-  } catch (error) {
-    console.error(`Error loading provider plugin ${providerName}: ${error.message}`);
-    console.error(`Make sure the plugin file exists at: ${path.join(PLUGIN_DIR, `${providerName}.js`)}`);
-    return null;
-  }
-};
-
-// Initialize app
-const initApp = async () => {
-  const appConfig = await loadConfig('config.yaml', DEFAULT_CONFIG);
-  //const uiConfig = await loadConfig('ui_config.yaml', DEFAULT_UI_CONFIG);
-  const uiConfig = DEFAULT_UI_CONFIG;
-  const agentConfigs = await loadAgentConfigs();
-
-  // Initialize providers
-  const providers = {};
-  for (const [providerName, providerConfig] of Object.entries(appConfig.providers)) {
-    const provider = await loadProviderPlugin(providerName);
-    if (provider) {
-      try {
-        await provider.init(providerConfig);
-        providers[providerName] = provider;
-      } catch (error) {
-        console.error(`Error initializing provider ${providerName}:`, error.message);
+  if (!currentConversationId) {
+    // Create a new conversation
+    db.run(
+      `INSERT INTO conversations (title) VALUES (?)`,
+      [`Conversation started at ${new Date().toLocaleString()}`],
+      function (err) {
+        if (err) throw err;
+        currentConversationId = this.lastID;
+        loadConversations();
+        saveMessage(currentConversationId, "user", message);
+        generateAIResponse(message);
       }
+    );
+  } else {
+    saveMessage(currentConversationId, "user", message);
+    generateAIResponse(message);
+  }
+});
+
+// Save message to the database
+function saveMessage(conversationId, role, content) {
+  db.run(
+    `INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)`,
+    [conversationId, role, content],
+    (err) => {
+      if (err) throw err;
+      chatArea.pushLine(`{bold}${role}:{/bold} ${content}`);
+      chatArea.setScrollPerc(100);
+      screen.render();
     }
-  }
+  );
+}
 
-  if (Object.keys(providers).length === 0) {
-    console.error('No providers were successfully loaded. Please check your configuration and plugins.');
-    process.exit(1);
-  }
-
-  return { appConfig, uiConfig, agentConfigs, providers };
-};
-
-// UI setup
-const setupUI = (uiConfig) => {
-  const s = blessed.screen({ smartCSR: true });
-  const main = blessed.box({ parent: s, top: 0, left: 0, width: "100%", height: "100%" });
-  const chatBox = blessed.box({
-    parent: main,
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%-3",
-    scrollable: true,
-    alwaysScroll: true,
-    tags: true,
-    style: { fg: uiConfig.colors.chat_text },
-  });
-  const inputBox = blessed.textarea({
-    parent: main,
-    bottom: 0,
-    left: 0,
-    height: 3,
-    width: "100%",
-    inputOnFocus: true,
-    padding: { top: 1, left: 2 },
-    style: { fg: uiConfig.colors.input_text, bg: uiConfig.colors.input_bg },
-  });
-  const statusBar = blessed.text({
-    parent: main,
-    bottom: 3,
-    left: 0,
-    width: "100%",
-    height: 1,
-    style: { fg: uiConfig.colors.status_text, bg: uiConfig.colors.status_bg },
-  });
-
-  return { s, main, chatBox, inputBox, statusBar };
-};
-
-// Main application logic
-const runApp = async () => {
-  const { appConfig, uiConfig, agentConfigs, providers } = await initApp();
-  const { s, chatBox, inputBox, statusBar } = setupUI(uiConfig);
-
-  let currentAgent = appConfig.default_agent;
-  let messages = [];
-
-  const uStatus = () => {
-    statusBar.setContent(` Agent: ${currentAgent} | Messages: ${messages.length} | Ctrl-C: Exit`);
-    s.render();
-  };
-
-  const aMessage = (role, content) => {
-    messages.push({ role, content });
-    const prefix = role === "user" ? "{bold}{red}You:{/bold}" : "{bold}{yellow}AI:{/bold}";
-    chatBox.pushLine(`${prefix} ${content}`);
-    chatBox.setScrollPerc(100);
-    uStatus();
-  };
-
-  const gResponse = async () => {
-    try {
-      aMessage("assistant", "Thinking...");
-      
-      const agentConfig = agentConfigs[currentAgent] || DEFAULT_AGENT_CONFIG;
-      const provider = providers[agentConfig.provider];
-      
-      if (!provider) {
-        throw new Error(`Provider ${agentConfig.provider} not available.`);
-      }
-
-      const formattedMessages = provider.formatMessages([
-        { role: "system", content: agentConfig.system_prompt },
-        ...messages
-      ]);
-
-      const response = await provider.generateResponse(formattedMessages, {
-        model: agentConfig.model,
-        ...agentConfig.response_generation
+// Generate AI response using OpenAI API
+async function generateAIResponse(userMessage) {
+  const messages = [];
+  db.all(
+    `SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
+    [currentConversationId],
+    async (err, rows) => {
+      if (err) throw err;
+      rows.forEach((row) => {
+        messages.push({ role: row.role, content: row.content });
       });
 
-      chatBox.setLine(-1, `{bold}{yellow}AI:{/bold} ${response.text}`);
-      messages[messages.length - 1].content = response.text;
-      
-      chatBox.scrollTo(chatBox.getScrollHeight());
-      s.render();
-      uStatus();
-    } catch (e) {
-      aMessage("assistant", `Error: ${e.message}`);
-    }
-  };
+      try {
+        const response = await openai.createChatCompletion({
+          model: "gpt-3.5-turbo",
+          messages: messages,
+        });
 
-  inputBox.key("enter", () => {
-    const msg = inputBox.getValue().trim();
-    if (msg.startsWith("/agent ")) {
-      const newAgent = msg.slice(7).trim();
-      if (agentConfigs[newAgent]) {
-        currentAgent = newAgent;
-        aMessage("system", `Switched to agent: ${newAgent}`);
-      } else {
-        aMessage("system", `Unknown agent: ${newAgent}. Available agents: ${Object.keys(agentConfigs).join(', ')}`);
+        const aiMessage = response.data.choices[0].message.content;
+        tokenUsage += response.data.usage.total_tokens;
+
+        saveMessage(currentConversationId, "assistant", aiMessage);
+        updateStatusBar();
+      } catch (error) {
+        saveMessage(
+          currentConversationId,
+          "assistant",
+          "Error: Unable to generate response."
+        );
+        console.error(error);
       }
-    } else if (msg) {
-      aMessage("user", msg);
-      gResponse();
     }
-    inputBox.clearValue();
-    s.render();
-  });
+  );
+}
 
-  s.key(["escape", "C-c"], () => process.exit(0));
+// Handle commands
+function handleCommand(command) {
+  const args = command.slice(1).split(" ");
+  switch (args[0]) {
+    case "new":
+      currentConversationId = null;
+      chatArea.setContent("");
+      screen.render();
+      break;
+    case "model":
+      // Switch model (not fully implemented)
+      // For example: /model gpt-4
+      statusBar.setContent(`Model: ${args[1]} | Tokens Used: ${tokenUsage}`);
+      screen.render();
+      break;
+    case "help":
+      chatArea.pushLine("{bold}Available Commands:{/bold}");
+      chatArea.pushLine("/new - Start a new conversation");
+      chatArea.pushLine("/model [model_name] - Switch AI model");
+      chatArea.pushLine("/help - Show this help message");
+      chatArea.setScrollPerc(100);
+      screen.render();
+      break;
+    default:
+      chatArea.pushLine(`Unknown command: ${command}`);
+      chatArea.setScrollPerc(100);
+      screen.render();
+      break;
+  }
+}
 
-  uStatus();
-  inputBox.focus();
-  s.render();
-};
+// Update status bar
+function updateStatusBar() {
+  statusBar.setContent(`Model: GPT-3.5 Turbo | Tokens Used: ${tokenUsage}`);
+  screen.render();
+}
 
-// Run the application
-runApp().catch(error => {
-  console.error('Fatal error:', error);
-  console.log('Please ensure all necessary configurations and plugins are in place.');
-  process.exit(1);
+// Keybindings
+screen.key(["C-c"], () => {
+  db.close();
+  process.exit(0);
 });
+
+input.focus();
+loadConversations();
+screen.render();
