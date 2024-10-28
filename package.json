@@ -1,12 +1,36 @@
 {
   "name": "cli-ai-chat",
-  "version": "1.0.0",
+  "bin": {
+    "connect-cli": "./bin/connect-cli.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "test": "node --test",
+    "lint": "eslint .",
+    "prepare": "npm run build",
+    "release": "release-it"
+  },
+  "engines": {
+    "node": ">=23.1.0"
+  },
+  "keywords": [
+    "ai",
+    "cli",
+    "chat",
+    "vim",
+    "terminal",
+    "openrouter",
+    "gpt",
+    "tui"
+  ],
   "main": "index.js",
   "type": "module",
-  "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "author": "",
   "license": "ISC",
   "description": "",
@@ -19,5 +43,18 @@
     "inquirer": "^10.1.8",
     "js-yaml": "^4.1.0",
     "os": "^0.1.2"
+  },
+  "release-it": {
+    "git": {
+      "tagName": "v${version}",
+      "commitMessage": "chore: release v${version}"
+    },
+    "npm": {
+      "publish": true
+    },
+    "github": {
+      "release": true,
+      "draft": true
+    }
   }
 }

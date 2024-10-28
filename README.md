@@ -1,168 +1,180 @@
-# AI Chat CLI
-An advanced, irssi-inspired CLI application for interacting with multiple AI language models in a threaded conversation format.
+# cli-ai-chat
 
-## Features
-• Multi-Model Support: Interact with various AI models (e.g., GPT-3.5, Claude) within the same conversation.
-• Threaded Conversations: Create and navigate complex conversation trees with user-initiated branching.
-• Dynamic Model Switching: Change AI models on-the-fly, even within the same conversation thread.
-• Vim-like Interface: Familiar, keyboard-driven navigation and command system.
-• Powerful Search: Fuzzy search functionality for finding specific threads or content.
-• Extensibility: User-defined scripts and customizations for enhanced functionality.
-• Persistence: Automatic saving of all conversations for easy recall and continuation.
-Architecture
-• Language: Node.js (JavaScript)
-• User Interface: Text-based UI (TUI) using the Blessed library
-• Data Storage: SQLite database with a graph-like structure
-• AI Integration: Plugin-based system for easy addition of new AI models
-• Error Handling: Detailed logging with Winston, following standard Unix/CLI patterns
-UI Layout
-• Left sidebar (30% width): Thread/Channel list with vim-like file explorer
-• Main view (70% width): Current conversation thread
-• Bottom input area: For user messages and commands
-• Status bar: Displaying current model, token usage, and other relevant information
-
-
-## Key Concepts
-1. Threaded Conversations:
-• User-initiated branching
-• Vim-like navigation (j/k for up/down, h/l for collapse/expand)
-• Command-line options for creating and managing threads
-2. AI Model Integration:
-• Dynamic switching between models
-• Custom system prompts for each model instance
-• Model-to-model interactions within the same thread
-3. Navigation:
-• Command-line /slash commands
-• Numbered shortcuts for quick thread switching
-• Fuzzy search (fzf-style) for finding threads and content
-4. Persistence and Data Management:
-• Automatic saving of all conversations in SQLite database
-• Graph-like data structure for efficient thread management
-5. Extensibility:
-• Support for user-defined scripts and customizations
-• Plugin architecture for adding new features and AI models
-6. Security:
-• Secure handling of API keys through .env files or setup wizard
-• Encryption of sensitive data at rest
-7. Performance:
-• Optimized for speed and responsiveness
-• Efficient data structures and algorithms
-• Techniques like lazy loading and local caching as needed
-
-
-## Getting Started
-(Instructions for installation, configuration, and basic usage will be added as the project develops)
-
-## Configuration
-• API keys can be added through .env files or using the built-in configuration wizard
-• Detailed logs are available in error.log, following standard Unix/CLI patterns
-Comprehensive Configuration Guide for AI Chat CLI
-Welcome to the configuration guide for our irssi-style AI chat application. This document will walk you through all the possible configuration options, allowing you to customize the application to your specific needs.
-
-
-
-### 1.1 Installation
+A cyberpunk-inspired terminal client for AI chat with vim controls, built for developers who live in the terminal.
 
 ```bash
-git clone https://github.com/your-repo/ai-chat-cli.git
-cd ai-chat-cli
+npm install -g cli-ai-chat
+connect-cli
+```
+
+## Core Vision
+
+Built for developers who want a powerful, keyboard-driven interface for AI interactions. Inspired by irssi, vim, and classic BBS systems, cli-ai-chat brings AI chat to the terminal with a focus on efficiency and extensibility.
+
+### Key Design Principles
+- **Terminal-First**: Built for developers who live in the command line
+- **Keyboard-Driven**: Complete vim-style navigation and control
+- **Threaded Conversations**: Branch and navigate complex discussion trees
+- **Extensible**: Plugin system for custom features and AI models
+- **Persistent**: Automatic SQLite-backed conversation storage
+- **Efficient**: Native Node.js v23+ SQLite integration
+- **Developer-Friendly**: File generation, code handling, and more
+
+## Features
+
+### Core Systems
+- **Native SQLite**: Built on Node.js 23.1.0's SQLite integration
+- **Thread Management**: Graph-based conversation storage
+- **OpenRouter Integration**: Single API for multiple AI models
+- **File Generation**: AI can save files via `<FileExport>` tags
+- **Real-Time Streaming**: Smooth response streaming with indicators
+
+### Interface
+```
+┌─ Threads ─┐┌─ Conversation ──────────────────┐
+│           ││                                 │
+│ Thread 1  ││ User: Help me with a React...  │
+│ Thread 2  ││ AI: Let's break this down...   │
+│           ││                                 │
+│           ││                                 │
+└───────────┘└─────────────────────────────────┘
+[INSERT] Model: GPT-4 | Tokens: 150
+```
+
+- Vim navigation (j/k, gg/G, etc.)
+- Command mode with fuzzy search
+- Real-time response streaming
+- Thread branching and navigation
+- File save notifications
+
+## Quick Start
+
+```bash
+# Install globally
+npm install -g cli-ai-chat
+
+# Initialize config
+connect-cli init
+
+# Add your OpenRouter API key to ~/.config/connect-cli/config.yaml
+connect-cli
+```
+
+## Navigation
+
+### Vim Controls
+- `j/k`: Scroll up/down
+- `g g`: Jump to top
+- `G`: Jump to bottom
+- `H/L`: Previous/next thread
+- `:`: Command mode
+- `/`: Search mode
+- `i`: Insert mode
+- `v`: Visual mode
+- `m{a-z}`: Set mark
+- `'{a-z}`: Jump to mark
+
+### Commands
+- `:model <name>`: Switch AI model
+- `:thread [list|new|delete] [id]`: Thread management
+- `:search <query>`: Search conversations
+- `:write [filename]`: Save conversation
+- `:help [command]`: Show help
+- `:set <option> <value>`: Configure settings
+
+## Architecture
+
+### Core Components
+```
+src/
+├── core/
+│   ├── Controller.js   # Central application logic
+│   ├── Database.js     # SQLite integration
+│   └── AIClient.js     # OpenRouter/AI handling
+├── ui/
+│   ├── Screen.js       # Blessed UI components
+│   └── VimHandler.js   # Vim navigation/modes
+└── utils/
+    ├── Commands.js     # Command processing
+    ├── Config.js       # Configuration
+    └── Logger.js       # Winston logging
+```
+
+### Configuration
+```yaml
+# ~/.config/connect-cli/config.yaml
+ai:
+  apiKey: "your_openrouter_key"
+  defaultModel: "openai/gpt-3.5-turbo"
+database:
+  path: "~/.local/share/connect-cli/conversations.db"
+ui:
+  theme: "cyberpunk"
+  animations: true
+system:
+  logLevel: "info"
+```
+
+### File Export Feature
+AI can generate and save files:
+```
+<FileExport name="example.js">
+console.log('Hello from the terminal!');
+</FileExport>
+```
+Files are saved to `~/.local/share/connect-cli/exports/<conversation_id>/`.
+
+## Development
+
+### Requirements
+- Node.js >= 23.1.0 (for native SQLite)
+- npm or yarn
+
+### Setup
+```bash
+# Clone
+git clone https://github.com/your-username/cli-ai-chat.git
+cd cli-ai-chat
+
+# Install
 npm install
+
+# Build
+npm run build
+
+# Test
+npm test
 ```
 
-### 1.2 Main Configuration File
-Create a config.yaml file in the root directory:
+### Testing
+- SQLite test database
+- Mocked AI responses
+- Blessed screen simulation
+- Command processing tests
 
-app_name: "AI Chat CLI"
-version: "1.0.0"
-default_provider: "openai"
-default_agent: "general-assistant"
-data_directory: "./data"
-log_level: "info"
+## Roadmap
 
-### 2. Provider Configuration
-Create a providers.yaml file in the config directory:
+- [ ] Plugin system for custom commands
+- [ ] Multiple conversation views
+- [ ] Advanced thread visualization
+- [ ] Code execution sandbox
+- [ ] Real-time collaboration
+- [ ] Custom UI themes
+- [ ] Enhanced vim features
+- [ ] Cross-device sync
 
-```yaml
-providers:
-  openai:
-    api_key: ${OPENAI_API_KEY}
-    base_url: "https://api.openai.com/v1"
-    default_model: "gpt-3.5-turbo"
-  anthropic:
-    api_key: ${ANTHROPIC_API_KEY}
-    base_url: "https://api.anthropic.com"
-    default_model: "claude-2"
-```
+## Credits
 
-Add more providers as needed
+Built with:
+- [Blessed](https://github.com/chjj/blessed): Terminal UI
+- [Node.js SQLite](https://nodejs.org/api/sqlite3.html): Native SQLite
+- [OpenRouter](https://openrouter.ai/): AI model access
+- [Winston](https://github.com/winstonjs/winston): Logging
 
-### 3. Agent Configuration
-For each agent, create a YAML file in the agents directory. Example: `agents/openai-code-expert.yaml`
+## License
 
-```yaml
-name: "Code Expert"
-provider: "openai"
-model: "gpt-4"
-version: "1.0"
+ISC
 
-system_prompt: |
-  You are an expert programmer proficient in multiple languages.
-  Your task is to assist with code-related queries, debugging, and optimization.
+## Contributing
 
-context_management:
-  max_tokens: 4000
-  context_ratio: 0.8
-  memory_type: "sliding_window"
-
-response_generation:
-  max_tokens: 1000
-  temperature: 0.4
-  top_p: 0.9
-
-capabilities:
-  code_execution: true
-  web_search: false
-  function_calling:
-    method: "xml"
-    command_syntax: "function:name(arg1, arg2)"
-```
-
-
-
-4. Plugin System
-Create a plugins_config.yaml file in the config directory:
-
-```yaml
-enabled_plugins:
-  - "code_executor"
-  - "web_search"
-  - "image_analyzer"
-
-plugin_directories:
-  - "./plugins"
-  - "~/.ai-chat-cli/plugins"
-
-auto_update_plugins: true
-
-plugin_settings:
-  code_executor:
-    supported_languages:
-      - "python"
-      - "javascript"
-      - "ruby"
-    sandbox_environment: true
-  web_search:
-    search_engine: "duckduckgo"
-    max_results: 5
-```
-
----
-
-Usage Tips
-1. Environment Variables: Use environment variables for sensitive information like API keys. You can set these in a .env file in the root directory.
-2. Customization: Start with the default configurations and gradually customize as you become familiar with the system.
-3. Agent Specialization: Create specialized agents for different tasks (e.g., coding, writing, research) by fine-tuning their configurations.
-4. Regular Updates: Keep your configuration files up to date as new features are added to the application.
-5. Backup: Regularly backup your configuration files, especially before making significant changes.
-6. Testing: After making changes, test the application thoroughly to ensure everything works as expected.
-7. Community Configs: Check our community forum for shared configuration setups that might suit your needs.
+PRs welcome! Check out the issues for what's needed.
