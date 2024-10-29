@@ -35,6 +35,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@clickhouse/client": "^1.7.0",
+    "@clickhouse/client-web": "^1.7.0",
     "axios": "^1.7.3",
     "blessed": "^0.1.81",
     "chalk": "^5.3.0",
@@ -42,7 +44,10 @@
     "figlet": "^1.7.0",
     "inquirer": "^10.1.8",
     "js-yaml": "^4.1.0",
-    "os": "^0.1.2"
+    "os": "^0.1.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "winston": "^3.15.0"
   },
   "release-it": {
     "git": {

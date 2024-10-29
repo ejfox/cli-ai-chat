@@ -1,5 +1,5 @@
-const { EventEmitter } = require("events");
-const { logger } = require("../utils/Logger");
+import { EventEmitter } from "events";
+import { logger } from "../../utils/Logger.js";
 
 // Mode indicators for status line
 const MODE_INDICATORS = {
@@ -312,4 +312,5 @@ class VimHandler extends EventEmitter {
   }
 }
 
-module.exports = { VimHandler };
+// module.exports = { VimHandler };
+export { VimHandler };

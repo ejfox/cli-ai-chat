@@ -1,7 +1,7 @@
-const winston = require("winston");
-const { ClickHouseClient } = require("@clickhouse/client");
-const path = require("path");
-const fs = require("fs").promises;
+import winston from "winston";
+import { ClickHouseClient } from "@clickhouse/client";
+import path from "path";
+import { promises as fs } from "fs";
 
 // Custom ClickHouse transport for Winston
 class ClickHouseTransport extends winston.Transport {
@@ -213,6 +213,10 @@ class Logger {
   }
 
   error(message, metadata = {}) {
+    if (!this.logger) {
+      console.error("Logger not initialized", message, metadata);
+      return;
+    }
     this.logger.error(message, metadata);
   }
 
@@ -249,4 +253,5 @@ const logger = new Logger({
   },
 });
 
-module.exports = { logger, Logger, ClickHouseTransport };
+// module.exports = { logger, Logger, ClickHouseTransport };
+export { logger, Logger, ClickHouseTransport };

@@ -1,5 +1,5 @@
-const { EventEmitter } = require("events");
-const { logger } = require("./Logger");
+import { EventEmitter } from "events";
+import { logger } from "./Logger.js";
 
 // Command metadata for help and autocompletion
 const COMMANDS = {
@@ -322,4 +322,5 @@ ${Object.entries(COMMANDS)
   }
 }
 
-module.exports = { CommandHandler };
+// module.exports = { CommandHandler };
+export { CommandHandler };

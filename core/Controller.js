@@ -1,10 +1,10 @@
-const { EventEmitter } = require("events");
-const { Database } = require("./Database");
-const { AIClient } = require("./AIClient");
-const { Screen } = require("../ui/Screen");
-const { VimHandler } = require("../ui/VimHandler");
-const { CommandHandler } = require("../utils/Commands");
-const { logger } = require("../utils/Logger");
+import { EventEmitter } from "events";
+import { Database } from "./Database.js";
+import { AIClient } from "./AIClient.js";
+import { Screen } from "./ui/Screen.js";
+import { VimHandler } from "./ui/VimHandler.js";
+import { CommandHandler } from "../utils/Commands.js";
+import { logger } from "../utils/Logger.js";
 
 class Controller extends EventEmitter {
   constructor(config) {
@@ -216,4 +216,4 @@ class Controller extends EventEmitter {
   }
 }
 
-module.exports = { Controller };
+export { Controller };

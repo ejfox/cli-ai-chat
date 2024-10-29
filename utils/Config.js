@@ -1,8 +1,8 @@
-const fs = require("fs").promises;
-const yaml = require("js-yaml");
-const path = require("path");
-const dotenv = require("dotenv");
-const { logger } = require("./Logger");
+import fs from "fs/promises";
+import yaml from "js-yaml";
+import path from "path";
+import dotenv from "dotenv";
+import { logger } from "./Logger.js";
 
 // Default configuration values
 const DEFAULT_CONFIG = {
@@ -245,4 +245,4 @@ class Config {
   }
 }
 
-module.exports = { Config, DEFAULT_CONFIG };
+export { Config, DEFAULT_CONFIG };

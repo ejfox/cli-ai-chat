@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const { Controller } = require("./core/Controller");
-const { Config } = require("./utils/Config");
-const { logger } = require("./utils/Logger");
+import { Controller } from "./core/Controller.js";
+import { Config } from "./utils/Config.js";
+import { logger } from "./utils/Logger.js";
 
 // Graceful shutdown handler
 process.on("SIGINT", async () => {

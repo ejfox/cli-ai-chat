@@ -1,6 +1,6 @@
-const blessed = require("blessed");
-const { EventEmitter } = require("events");
-const { logger } = require("../utils/Logger");
+import blessed from "blessed";
+import { EventEmitter } from "events";
+// import { logger } from "../../utils/Logger.js";
 
 const ASCII_LOGO = `
 ╔═══════════════════════════════════════╗
@@ -282,4 +282,4 @@ class Screen extends EventEmitter {
   }
 }
 
-module.exports = { Screen };
+export { Screen };

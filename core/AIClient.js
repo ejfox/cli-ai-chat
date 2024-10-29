@@ -1,6 +1,8 @@
-const OpenAI = require("openai");
-const { EventEmitter } = require("events");
-const { logger } = require("../utils/Logger");
+import OpenAI from "openai";
+import { EventEmitter } from "events";
+import { logger } from "../utils/Logger.js";
+import fs from "fs/promises";
+import path from "path";
 
 class AIClient extends EventEmitter {
   constructor(config) {
@@ -226,4 +228,5 @@ class AIClient extends EventEmitter {
   }
 }
 
-module.exports = { AIClient };
+// module.exports = { AIClient };
+export { AIClient };
