@@ -1,35 +1,26 @@
 #!/usr/bin/env node
 
-const path = require("path");
-const os = require("os");
-const fs = require("fs").promises;
-const { program } = require("commander");
-const { Controller } = require("../dist/core/Controller");
-const { Config } = require("../dist/utils/Config");
-const { version } = require("../package.json");
+import fs from "fs/promises";
+import { program } from "commander";
+import { Controller } from "../core/Controller.js";
+import { Config } from "../utils/Config.js";
+import yaml from 'js-yaml';
+import { DEFAULT_PATHS, ensureDirectories } from "../utils/paths.js";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
-// Default paths
-const DEFAULT_CONFIG_DIR = path.join(os.homedir(), ".config", "connect-cli");
-const DEFAULT_DATA_DIR = path.join(
-  os.homedir(),
-  ".local",
-  "share",
-  "connect-cli"
+// Get package.json version
+const __filename = fileURLToPath(import.meta.url);
+const packageJson = JSON.parse(
+  await fs.readFile(new URL('../package.json', import.meta.url))
 );
-const DEFAULT_CONFIG_PATH = path.join(DEFAULT_CONFIG_DIR, "config.yaml");
-const DEFAULT_DB_PATH = path.join(DEFAULT_DATA_DIR, "conversations.db");
-
-async function ensureDirectories() {
-  await fs.mkdir(DEFAULT_CONFIG_DIR, { recursive: true });
-  await fs.mkdir(DEFAULT_DATA_DIR, { recursive: true });
-}
 
 program
   .name("connect-cli")
   .description("Cyberpunk-inspired terminal client for AI chat")
-  .version(version)
-  .option("-c, --config <path>", "config file path", DEFAULT_CONFIG_PATH)
-  .option("--db <path>", "database file path", DEFAULT_DB_PATH)
+  .version(packageJson.version)
+  .option("-c, --config <path>", "config file path", DEFAULT_PATHS.CONFIG_PATH)
+  .option("--db <path>", "database file path", DEFAULT_PATHS.DB_PATH)
   .option("-d, --debug", "enable debug logging")
   .action(async (options) => {
     try {
@@ -49,7 +40,15 @@ program
 
       const controller = new Controller(config);
       await controller.initialize();
-      await controller.start();
+      
+      // Keep the process alive until explicitly terminated
+      try {
+        await controller.start();
+      } catch (error) {
+        console.error("Application error:", error);
+        await controller.shutdown();
+        process.exit(1);
+      }
     } catch (error) {
       console.error("Failed to start connect-cli:", error);
       process.exit(1);
@@ -64,13 +63,13 @@ program
       await ensureDirectories();
 
       // Create default config if it doesn't exist
-      if (!fs.existsSync(DEFAULT_CONFIG_PATH)) {
+      if (!await fs.access(DEFAULT_PATHS.CONFIG_PATH).then(() => true).catch(() => false)) {
         const defaultConfig = {
           ai: {
             defaultModel: "openai/gpt-3.5-turbo",
           },
           database: {
-            path: DEFAULT_DB_PATH,
+            path: DEFAULT_PATHS.DB_PATH,
           },
           ui: {
             theme: "cyberpunk",
@@ -81,11 +80,11 @@ program
         };
 
         await fs.writeFile(
-          DEFAULT_CONFIG_PATH,
-          require("yaml").stringify(defaultConfig)
+          DEFAULT_PATHS.CONFIG_PATH,
+          yaml.dump(defaultConfig)
         );
 
-        console.log(`Configuration created at ${DEFAULT_CONFIG_PATH}`);
+        console.log(`Configuration created at ${DEFAULT_PATHS.CONFIG_PATH}`);
         console.log("Please add your OpenRouter API key to complete setup");
       } else {
         console.log("Configuration already exists");

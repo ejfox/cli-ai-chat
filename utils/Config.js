@@ -76,7 +76,8 @@ const DEFAULT_CONFIG = {
 
 class Config {
   constructor() {
-    this.config = {};
+    // Initialize with default config
+    this.config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
     this.configPath = "";
     this.envPath = "";
   }
@@ -131,26 +132,23 @@ class Config {
 
   async loadConfig() {
     try {
-      // Start with default configuration
-      this.config = { ...DEFAULT_CONFIG };
-
-      // Load user configuration if it exists
-      const configExists = await fs
-        .access(this.configPath)
-        .then(() => true)
-        .catch(() => false);
-
-      if (configExists) {
-        const userConfig = yaml.load(
-          await fs.readFile(this.configPath, "utf8")
-        );
-        this.mergeConfigs(this.config, userConfig);
+      // Try to load user configuration
+      let userConfig = {};
+      try {
+        const configFile = await fs.readFile(this.configPath, "utf8");
+        userConfig = yaml.load(configFile) || {};
         logger.info("Loaded user configuration");
-      } else {
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
         logger.warn("No user configuration found, using defaults");
         // Create default config file
         await this.saveDefaultConfig();
       }
+
+      // Merge user config with defaults
+      this.mergeConfigs(this.config, userConfig);
 
       // Override with environment variables
       this.applyEnvironmentOverrides();
@@ -186,9 +184,16 @@ class Config {
   applyEnvironmentOverrides() {
     // Override AI provider keys
     if (process.env.OPENAI_API_KEY) {
+      if (!this.config.ai.providers.openai) {
+        this.config.ai.providers.openai = {};
+      }
       this.config.ai.providers.openai.apiKey = process.env.OPENAI_API_KEY;
     }
+
     if (process.env.ANTHROPIC_API_KEY) {
+      if (!this.config.ai.providers.anthropic) {
+        this.config.ai.providers.anthropic = {};
+      }
       this.config.ai.providers.anthropic.apiKey = process.env.ANTHROPIC_API_KEY;
     }
 
@@ -204,30 +209,31 @@ class Config {
   }
 
   validate() {
-    // Required API keys
-    const provider = this.config.ai.defaultProvider;
-    if (!this.config.ai.providers[provider]?.apiKey) {
-      throw new Error(`Missing API key for default provider: ${provider}`);
+    // Only validate API key if we're using an AI provider
+    const provider = this.config.ai?.defaultProvider;
+    if (provider && !process.env[`${provider.toUpperCase()}_API_KEY`]) {
+      // Make this a warning instead of an error
+      logger.warn(`Missing API key for default provider: ${provider}`);
+      // Don't throw error - allow initialization without API key
     }
 
     // Validate paths
-    if (!path.isAbsolute(this.config.database.path)) {
-      this.config.database.path = path.resolve(
-        process.cwd(),
-        this.config.database.path
-      );
+    if (this.config.database?.path && !path.isAbsolute(this.config.database.path)) {
+      this.config.database.path = path.resolve(process.cwd(), this.config.database.path);
     }
 
     // Validate numeric values
-    if (this.config.ai.maxTokens < 1) {
+    if (this.config.ai?.maxTokens && this.config.ai.maxTokens < 1) {
       throw new Error("maxTokens must be greater than 0");
     }
 
-    // Validate theme colors
-    const requiredModes = ["normal", "insert", "command"];
-    for (const mode of requiredModes) {
-      if (!this.config.ui.theme[mode]) {
-        throw new Error(`Missing theme configuration for mode: ${mode}`);
+    // Validate theme colors if UI config exists
+    if (this.config.ui?.theme) {
+      const requiredModes = ["normal", "insert", "command"];
+      for (const mode of requiredModes) {
+        if (!this.config.ui.theme[mode]) {
+          throw new Error(`Missing theme configuration for mode: ${mode}`);
+        }
       }
     }
   }

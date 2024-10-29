@@ -125,6 +125,44 @@ class Logger {
   constructor(config) {
     this.config = config;
     this.initialized = false;
+    this.logger = winston.createLogger({
+      level: config.system.logLevel || 'info',
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple()
+          )
+        })
+      ]
+    });
+    this.initialized = true;
+  }
+
+  // Add fallback logging for when logger isn't initialized
+  log(level, message, meta = {}) {
+    if (!this.initialized) {
+      console.log(`Logger not initialized ${message}`, meta);
+      return;
+    }
+    this.logger[level](message, meta);
+  }
+
+  info(message, meta = {}) {
+    this.log('info', message, meta);
+  }
+
+  error(message, meta = {}) {
+    this.log('error', message, meta);
+  }
+
+  // Add the missing warn method
+  warn(message, meta = {}) {
+    this.log('warn', message, meta);
+  }
+
+  debug(message, meta = {}) {
+    this.log('debug', message, meta);
   }
 
   async initialize() {
@@ -170,13 +208,6 @@ class Logger {
       }),
     ];
 
-    // Add ClickHouse transport if configured
-    if (this.config.analytics?.clickhouse) {
-      transports.push(
-        new ClickHouseTransport(this.config.analytics.clickhouse)
-      );
-    }
-
     this.logger = winston.createLogger({
       level: this.config.system.logLevel,
       transports,
@@ -187,59 +218,15 @@ class Logger {
 
   parseSize(size) {
     const units = {
+      b: 1,
       k: 1024,
       m: 1024 * 1024,
       g: 1024 * 1024 * 1024,
     };
-
-    const match = size.toString().match(/^(\d+)([kmg])?$/i);
+    const match = size.toString().match(/^(\d+)([bkmg])?$/i);
     if (!match) throw new Error(`Invalid size format: ${size}`);
-
-    const [, number, unit] = match;
-    return number * (units[unit?.toLowerCase()] || 1);
-  }
-
-  // Logging methods with metadata support
-  log(level, message, metadata = {}) {
-    this.logger.log(level, message, metadata);
-  }
-
-  info(message, metadata = {}) {
-    this.logger.info(message, metadata);
-  }
-
-  warn(message, metadata = {}) {
-    this.logger.warn(message, metadata);
-  }
-
-  error(message, metadata = {}) {
-    if (!this.logger) {
-      console.error("Logger not initialized", message, metadata);
-      return;
-    }
-    this.logger.error(message, metadata);
-  }
-
-  debug(message, metadata = {}) {
-    this.logger.debug(message, metadata);
-  }
-
-  // Analytics-specific logging
-  async logInteraction(metadata) {
-    this.logger.info("User interaction", {
-      ...metadata,
-      timestamp: new Date(),
-      environment: process.env.NODE_ENV,
-    });
-  }
-
-  // Usage statistics logging
-  async logUsage(metadata) {
-    this.logger.info("Usage stats", {
-      ...metadata,
-      timestamp: new Date(),
-      environment: process.env.NODE_ENV,
-    });
+    const [, num, unit = 'b'] = match;
+    return parseInt(num) * units[unit.toLowerCase()];
   }
 }
 
@@ -253,5 +240,4 @@ const logger = new Logger({
   },
 });
 
-// module.exports = { logger, Logger, ClickHouseTransport };
 export { logger, Logger, ClickHouseTransport };

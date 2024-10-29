@@ -1,6 +1,6 @@
-import blessed from "blessed";
+import blessed from "neo-blessed";
 import { EventEmitter } from "events";
-// import { logger } from "../../utils/Logger.js";
+import { logger } from "../../utils/Logger.js";
 
 const ASCII_LOGO = `
 ╔═══════════════════════════════════════╗
@@ -17,52 +17,78 @@ class Screen extends EventEmitter {
     this.config = config;
     this.loadingInterval = null;
     this.loadingFrame = 0;
+    this.screen = null;
+    this.selectedThread = 0;
   }
 
-  initialize() {
-    // Create blessed screen
-    this.screen = blessed.screen({
-      smartCSR: true,
-      title: "ConnectCLI",
-      cursor: {
-        artificial: true,
-        shape: "line",
-        blink: true,
-        color: null,
-      },
-    });
+  async initialize() {
+    try {
+      // Create screen with minimal options first
+      this.screen = blessed.screen({
+        smartCSR: true,
+        input: process.stdin,
+        output: process.stdout,
+        terminal: 'xterm',
+        fullUnicode: true,
+        autoPadding: true,
+        title: 'ConnectCLI',
+        debug: false,  // Disable debug output
+        warnings: false  // Disable warnings
+      });
 
-    // Create main layout
-    this.createLayout();
+      // Handle Ctrl+C properly
+      this.screen.program.on('keypress', (ch, key) => {
+        if (key && key.ctrl && key.name === 'c') {
+          this.emit('quit');
+          return;
+        }
+      });
 
-    // Set up key bindings
-    this.setupKeys();
+      // Prevent blessed from taking over error handling
+      this.screen.program.on('error', (err) => {
+        logger.error('Terminal error:', err);
+      });
 
-    // Initial render
-    this.screen.render();
+      // Create main layout
+      this.createLayout();
 
-    // Show startup animation
-    this.showStartupAnimation();
+      // Set up key bindings
+      this.setupKeys();
+
+      // Initial render
+      this.screen.render();
+
+      logger.debug('Screen initialized successfully');
+      return true;
+    } catch (error) {
+      logger.error('Failed to initialize screen:', error);
+      throw error;
+    }
   }
 
   createLayout() {
     // Sidebar for threads
-    this.threadList = blessed.box({
+    this.threadList = blessed.list({
       parent: this.screen,
       left: 0,
       top: 0,
       width: "30%",
       height: "100%-2",
-      label: " ╒═══ Threads ═══╕ ",
       border: {
-        type: "line",
-        fg: "#666",
+        type: 'line'
       },
       style: {
-        border: {
-          fg: "#666",
+        selected: {
+          bg: 'blue'
         },
+        border: {
+          fg: 'white'
+        }
       },
+      keys: true,
+      vi: true,
+      mouse: true,
+      label: ' Threads '
     });
 
     // Main chat area
@@ -72,27 +98,18 @@ class Screen extends EventEmitter {
       top: 0,
       width: "70%",
       height: "100%-2",
-      label: " ╒═══ Conversation ═══╕ ",
       border: {
-        type: "line",
-        fg: "#666",
-      },
-      style: {
-        border: {
-          fg: "#666",
-        },
+        type: 'line'
       },
       scrollable: true,
       alwaysScroll: true,
+      mouse: true,
+      label: ' Conversation ',
       scrollbar: {
-        ch: "┃",
-        track: {
-          bg: "#000",
-        },
         style: {
-          inverse: true,
-        },
-      },
+          bg: 'white'
+        }
+      }
     });
 
     // Status bar
@@ -102,14 +119,15 @@ class Screen extends EventEmitter {
       left: 0,
       width: "100%",
       height: 1,
+      content: ' NORMAL ',
       style: {
-        fg: "#666",
-        bg: "#000",
-      },
+        fg: 'white',
+        bg: 'blue'
+      }
     });
 
     // Input box
-    this.inputBox = blessed.textbox({
+    this.inputBox = blessed.textarea({
       parent: this.screen,
       bottom: 1,
       left: 0,
@@ -117,43 +135,29 @@ class Screen extends EventEmitter {
       height: 1,
       inputOnFocus: true,
       style: {
-        fg: "#00ff00",
-      },
-    });
-
-    // Model indicator (top right)
-    this.modelIndicator = blessed.box({
-      parent: this.screen,
-      right: 1,
-      top: 0,
-      width: 20,
-      height: 1,
-      content: "≣ GPT-3.5",
-      style: {
-        fg: "#666",
-      },
+        fg: 'white'
+      }
     });
   }
 
   setupKeys() {
-    // Quit on Ctrl-C or q
-    this.screen.key(["C-c"], () => {
-      this.emit("quit");
-      return process.exit(0);
+    // Quit on Ctrl+C
+    this.screen.key(['C-c'], () => {
+      this.emit('quit');
     });
 
     // Input handling
-    this.inputBox.key("enter", async () => {
+    this.inputBox.key('enter', async () => {
       const message = this.inputBox.getValue();
       if (message.trim()) {
         this.inputBox.clearValue();
         this.screen.render();
-        this.emit("message", message.trim());
+        this.emit('message', message.trim());
       }
     });
 
     // Focus handling
-    this.inputBox.key(["escape"], () => {
+    this.inputBox.key(['escape'], () => {
       this.threadList.focus();
     });
   }
@@ -278,7 +282,72 @@ class Screen extends EventEmitter {
   }
 
   destroy() {
-    this.screen.destroy();
+    if (this.loadingInterval) {
+      clearInterval(this.loadingInterval);
+    }
+
+    if (this.screen) {
+      // Remove all listeners
+      this.screen.program.input.removeAllListeners();
+      this.screen.program.output.removeAllListeners();
+      
+      // Restore terminal state
+      this.screen.program.disableMouse();
+      this.screen.program.showCursor();
+      this.screen.program.normalBuffer();
+      
+      // Clear screen
+      this.screen.leave();
+      this.screen.destroy();
+    }
+
+    // Restore terminal
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+  }
+
+  clearChat() {
+    if (this.chatBox) {
+      this.chatBox.setContent('');
+      this.screen.render();
+    }
+  }
+
+  updateTitle(title) {
+    if (this.chatBox) {
+      this.chatBox.setLabel(` ╒═══ ${title} ═══╕ `);
+      this.screen.render();
+    }
+  }
+
+  showHelp(content) {
+    const helpBox = blessed.box({
+      parent: this.screen,
+      top: 'center',
+      left: 'center',
+      width: '80%',
+      height: '80%',
+      content: content,
+      border: {
+        type: 'line',
+        fg: '#666'
+      },
+      style: {
+        border: {
+          fg: '#666'
+        }
+      },
+      scrollable: true,
+      keys: true,
+      vi: true
+    });
+
+    helpBox.key(['escape', 'q'], () => {
+      helpBox.destroy();
+      this.screen.render();
+    });
+
+    this.screen.render();
   }
 }
 

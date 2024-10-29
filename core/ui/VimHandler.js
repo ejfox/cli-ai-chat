@@ -27,12 +27,25 @@ class VimHandler extends EventEmitter {
     // Command mode history
     this.commandHistory = [];
     this.commandHistoryIndex = -1;
+  }
+
+  async initialize() {
+    // Make sure screen is initialized before setting up handlers
+    if (!this.screen.screen) {
+      throw new Error('Screen must be initialized before VimHandler');
+    }
 
     this.setupHandlers();
     this.updateStatusLine();
+    
+    logger.debug('VimHandler initialized');
   }
 
   setupHandlers() {
+    if (!this.screen.screen) {
+      throw new Error('Screen not initialized');
+    }
+
     this.screen.screen.on("keypress", (ch, key) => {
       if (!key) return;
 

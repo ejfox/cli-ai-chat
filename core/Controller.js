@@ -9,7 +9,7 @@ import { logger } from "../utils/Logger.js";
 class Controller extends EventEmitter {
   constructor(config) {
     super();
-    this.config = config;
+    this.config = config.config || config;
     this.currentConversationId = null;
     this.currentMode = "normal";
     this.isProcessingMessage = false;
@@ -17,18 +17,22 @@ class Controller extends EventEmitter {
 
   async initialize() {
     try {
-      // Initialize core components
+      // Initialize core components in the correct order
       this.db = new Database(this.config.database);
-      this.ai = new AIClient(this.config.ai);
+      this.ai = new AIClient(this.config);
+      
+      // Initialize screen first
       this.screen = new Screen(this.config.ui);
+      await this.screen.initialize();
+      
+      // Then initialize vim handler with initialized screen
       this.vim = new VimHandler(this.screen);
+      await this.vim.initialize();
+      
       this.commands = new CommandHandler(this);
 
       // Initialize database
       await this.db.initialize();
-
-      // Setup UI
-      await this.screen.initialize();
 
       // Setup event handlers
       this.setupEventHandlers();
@@ -100,6 +104,8 @@ class Controller extends EventEmitter {
 
   async start() {
     try {
+      logger.info("Starting controller...");
+      
       // Load initial conversations
       const conversations = await this.db.getRecentConversations();
       this.screen.updateThreadList(conversations);
@@ -115,7 +121,27 @@ class Controller extends EventEmitter {
       // Set initial focus
       this.screen.focus();
 
+      // Handle quit events
+      this.screen.on('quit', async () => {
+        await this.shutdown();
+        process.exit(0);
+      });
+
       logger.info("Controller started successfully");
+
+      // Keep the application running
+      return new Promise((resolve) => {
+        // Handle process termination
+        const cleanup = async () => {
+          await this.shutdown();
+          resolve();
+        };
+
+        // Set up cleanup handlers
+        process.on('SIGINT', cleanup);
+        process.on('SIGTERM', cleanup);
+        this.screen.on('quit', cleanup);
+      });
     } catch (error) {
       logger.error("Failed to start controller:", error);
       throw error;

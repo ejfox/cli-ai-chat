@@ -1,7 +1,8 @@
-const path = require("path");
-const fs = require("fs").promises;
-const { DatabaseSync } = require("node:sqlite");
-const { logger } = require("../src/utils/Logger");
+import path from "path";
+import fs from "fs/promises";
+import { Database } from "node:sqlite";
+import { logger } from "../utils/Logger.js";
+import { DEFAULT_PATHS } from "../utils/paths.js";
 
 class TestEnvironment {
   constructor() {
@@ -15,7 +16,7 @@ class TestEnvironment {
       await this.cleanup();
 
       // Create test database
-      this.db = new DatabaseSync(this.testDbPath, {
+      this.db = new Database(this.testDbPath, {
         enableForeignKeyConstraints: true,
       });
 
@@ -27,7 +28,7 @@ class TestEnvironment {
 
       logger.info("Test environment initialized");
 
-      // Return test configuration
+      // Return test configuration using shared paths structure
       return {
         database: {
           path: this.testDbPath,
@@ -152,4 +153,4 @@ class TestEnvironment {
   }
 }
 
-module.exports = { TestEnvironment };
+export { TestEnvironment };

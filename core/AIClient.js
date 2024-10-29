@@ -8,15 +8,24 @@ class AIClient extends EventEmitter {
   constructor(config) {
     super();
     this.config = config;
+    
+    // Get the provider config
+    const provider = config.ai?.defaultProvider || 'openai';
+    const providerConfig = config.ai?.providers?.[provider];
+    
+    if (!providerConfig?.apiKey) {
+      throw new Error(`API key not found for provider: ${provider}. Please set ${provider.toUpperCase()}_API_KEY in your environment variables.`);
+    }
+
     this.client = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl || "https://openrouter.ai/api/v1",
+      apiKey: providerConfig.apiKey,
+      baseURL: providerConfig.baseUrl || "https://openrouter.ai/api/v1",
       defaultHeaders: {
-        "HTTP-Referer":
-          config.referer || "https://github.com/your-username/ai-chat-cli",
+        "HTTP-Referer": config.referer || "https://github.com/your-username/ai-chat-cli",
       },
     });
-    this.defaultModel = config.defaultModel || "openai/gpt-3.5-turbo";
+    
+    this.defaultModel = config.ai?.defaultModel || "openai/gpt-3.5-turbo";
   }
 
   async generateResponse(messages, options = {}) {

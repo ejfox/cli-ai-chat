@@ -1,0 +1,52 @@
+database:
+  path: ./data/conversations.db
+  maxConnections: 10
+  enableWAL: true
+ai:
+  defaultProvider: openai
+  defaultModel: gpt-3.5-turbo
+  maxTokens: 4096
+  temperature: 0.7
+  providers:
+    openai:
+      baseUrl: https://api.openai.com/v1
+      timeout: 30000
+      maxRetries: 3
+    anthropic:
+      baseUrl: https://api.anthropic.com
+      timeout: 30000
+      maxRetries: 3
+ui:
+  theme:
+    normal:
+      fg: white
+      bg: black
+    insert:
+      fg: black
+      bg: green
+    command:
+      fg: black
+      bg: yellow
+  layout:
+    sidebar:
+      width: 30%
+    mainView:
+      scrollback: 1000
+    statusBar:
+      height: 1
+  vim:
+    enabledModes:
+      - normal
+      - insert
+      - command
+    shortcuts:
+      gg: scrollTop
+      G: scrollBottom
+      /: search
+      'n': nextSearchResult
+      'N': previousSearchResult
+system:
+  logLevel: info
+  logPath: ./logs
+  maxLogSize: 10m
+  maxLogFiles: 5
